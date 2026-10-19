@@ -1,29 +1,151 @@
-/* Custom typography and interactive transitions */
-body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  -webkit-font-smoothing: antialiased;
-}
+package com.example.suparesiti;
 
-/* Custom receipt frame border styling */
-#receiptFrame {
-  border-style: solid;
-  border-width: 6px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
-}
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.pdf.PdfDocument;
+import android.os.Bundle;
+import android.os.Environment;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.view.View;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.TextView;
+import android.widget.Toast;
 
-/* Custom transitions for color picker interaction */
-#receiptFrame,
-#prevTotal,
-#statusBadge,
-#brandDot {
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.cardview.widget.CardView;
 
-/* Hide webkit color picker swatch defaults for clean look */
-input[type="color"]::-webkit-color-swatch-wrapper {
-  padding: 0;
-}
-input[type="color"]::-webkit-color-swatch {
-  border: none;
-  border-radius: 6px;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+
+public class MainActivity extends AppCompatActivity {
+
+    private SharedPreferences prefs;
+    private EditText etMpesaCode, etCustomerName, etItemDesc, etAmount;
+    private TextView prevBizName, prevBizPhone, prevSerial, prevMpesa, prevCustomer, prevItem, prevTotal, tvBizBadge;
+    private CardView cardReceiptFrame;
+    private View layoutReceiptContent;
+    private Button btnPickColor, btnGeneratePdf;
+
+    private int selectedColor = Color.parseColor("#10B981");
+    private int serialNumber = 1001;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+
+        prefs = getSharedPreferences("SupaResitiPrefs", Context.MODE_PRIVATE);
+
+        // Check if vendor has setup profile
+        if (!prefs.getBoolean("isConfigured", false)) {
+            startActivity(new Intent(MainActivity.this, SetupActivity.class));
+            finish();
+            return;
+        }
+
+        setContentView(R.layout.activity_main);
+
+        initViews();
+        loadVendorProfile();
+        setupLiveTextWatchers();
+
+        // PDF Generation Trigger
+        btnGeneratePdf.setOnClickListener(v -> generatePdfFromView(cardReceiptFrame));
+    }
+
+    private void initViews() {
+        etMpesaCode = findViewById(R.id.etMpesaCode);
+        etCustomerName = findViewById(R.id.etCustomerName);
+        etItemDesc = findViewById(R.id.etItemDesc);
+        etAmount = findViewById(R.id.etAmount);
+
+        prevBizName = findViewById(R.id.prevBizName);
+        prevBizPhone = findViewById(R.id.prevBizPhone);
+        prevSerial = findViewById(R.id.prevSerial);
+        prevMpesa = findViewById(R.id.prevMpesa);
+        prevCustomer = findViewById(R.id.prevCustomer);
+        prevItem = findViewById(R.id.prevItem);
+        prevTotal = findViewById(R.id.prevTotal);
+        tvBizBadge = findViewById(R.id.tvBizBadge);
+
+        cardReceiptFrame = findViewById(R.id.cardReceiptFrame);
+        layoutReceiptContent = findViewById(R.id.layoutReceiptContent);
+        btnPickColor = findViewById(R.id.btnPickColor);
+        btnGeneratePdf = findViewById(R.id.btnGeneratePdf);
+    }
+
+    private void loadVendorProfile() {
+        String name = prefs.getString("bizName", "YOUR BUSINESS");
+        String phone = prefs.getString("bizPhone", "+254 700 000 000");
+        String location = prefs.getString("bizLocation", "Mombasa");
+
+        prevBizName.setText(name.toUpperCase());
+        prevBizPhone.setText(phone + " | " + location);
+        tvBizBadge.setText(name);
+        prevSerial.setText("Serial: SR-2026-" + serialNumber);
+    }
+
+    private void setupLiveTextWatchers() {
+        TextWatcher watcher = new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                updateReceiptPreview();
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {}
+        };
+
+        etMpesaCode.addTextChangedListener(watcher);
+        etCustomerName.addTextChangedListener(watcher);
+        etItemDesc.addTextChangedListener(watcher);
+        etAmount.addTextChangedListener(watcher);
+    }
+
+    private void updateReceiptPreview() {
+        prevMpesa.setText("M-Pesa Ref: " + etMpesaCode.getText().toString().toUpperCase());
+        prevCustomer.setText("Customer: " + etCustomerName.getText().toString());
+        prevItem.setText(etItemDesc.getText().toString());
+        prevTotal.setText("KSh " + etAmount.getText().toString());
+        prevTotal.setTextColor(selectedColor);
+    }
+
+    // Native Android PDF Generation
+    private void generatePdfFromView(View view) {
+        Bitmap bitmap = Bitmap.createBitmap(view.getWidth(), view.getHeight(), Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        view.draw(canvas);
+
+        PdfDocument pdfDocument = new PdfDocument();
+        PdfDocument.PageInfo pageInfo = new PdfDocument.PageInfo.Builder(view.getWidth(), view.getHeight(), 1).create();
+        PdfDocument.Page page = pdfDocument.startPage(pageInfo);
+
+        Canvas pageCanvas = page.getCanvas();
+        pageCanvas.drawBitmap(bitmap, 0, 0, null);
+        pdfDocument.finishPage(page);
+
+        File pdfFile = new File(getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), "Receipt_SR2026_" + serialNumber + ".pdf");
+
+        try {
+            pdfDocument.writeTo(new FileOutputStream(pdfFile));
+            Toast.makeText(this, "Receipt Saved: " + pdfFile.getAbsolutePath(), Toast.LENGTH_LONG).show();
+            serialNumber++;
+            prevSerial.setText("Serial: SR-2026-" + serialNumber);
+        } catch (IOException e) {
+            e.printStackTrace();
+            Toast.makeText(this, "Failed to export PDF", Toast.LENGTH_SHORT).show();
+        } finally {
+            pdfDocument.close();
+        }
+    }
 }
