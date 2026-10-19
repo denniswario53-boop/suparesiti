@@ -1,0 +1,29 @@
+/* Custom typography and interactive transitions */
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom receipt frame border styling */
+#receiptFrame {
+  border-style: solid;
+  border-width: 6px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+}
+
+/* Custom transitions for color picker interaction */
+#receiptFrame,
+#prevTotal,
+#statusBadge,
+#brandDot {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Hide webkit color picker swatch defaults for clean look */
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 6px;
+}
